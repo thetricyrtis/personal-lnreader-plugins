@@ -29,8 +29,6 @@ if [[ "$1" == "--all-branches" ]]; then
             git branch -D $dist
         fi
         git stash pop
-        npm run clean:multisrc
-        npm run build:multisrc
         echo "Compiling TypeScript..."
         npx tsc --project tsconfig.production.json
         echo "# $branch" >> $GITHUB_STEP_SUMMARY
@@ -99,5 +97,4 @@ git add -f public/static .dist .js/src/plugins total.svg
 git commit -m "chore: Publish Plugins"
 git push -f origin $dist 2>&1
 git checkout -f $current 2>&1
-echo "✅ Published to $dist"
-
+echo "✅ Published to 
