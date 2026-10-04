@@ -23,7 +23,7 @@ const MONTHS: Record<string, string> = {
 class NovZonPlugin implements Plugin.PluginBase {
   id = 'novzon';
   name = 'NovZon';
-  icon = 'src/tr/novzon/icon.png';
+  icon = 'src/turkish/novzon/icon.png';
   site = 'https://novzon.net';
   version = '1.0.0';
 
