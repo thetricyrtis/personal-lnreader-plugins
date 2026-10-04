@@ -1,0 +1,15 @@
+# Bağımlılıklar
+node_modules/
+
+# Derleme çıktıları
+dist/
+build/
+*.tsbuildinfo
+
+# Ortam değişkenleri
+.env
+.env.local
+
+# Log dosyaları
+*.log
+npm-debug.log*

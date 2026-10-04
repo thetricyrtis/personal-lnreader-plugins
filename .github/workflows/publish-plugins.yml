@@ -1,0 +1,46 @@
+name: Publish Plugins
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'plugins/**'
+      - 'public/**'
+      - 'scripts/publish-plugins.sh'
+      - '.github/workflows/publish-plugins.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish Plugins
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Dependencies
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email 41898282+github-actions[bot]@://github.com
+
+      - name: Publish Plugins
+        run: npm run publish:plugins -- --all-branches
+        shell: bash
