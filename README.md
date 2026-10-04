@@ -29,7 +29,9 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 
 ## Sorumluluk Reddi
 
-Bu repo novel kaynak siteleriyle veya LNReader ile resmî olarak bağlantılı değildir.
+Bu repo, eklentilerin eriştiği kaynak sitelerle veya LNReader ile resmî olarak bağlantılı değildir.
+Eklentiler herhangi bir içerik barındırmaz; içerikler ilgili sitelere aittir.
+Eklentiler kişisel kullanım içindir. Her sitenin kullanım şartlarına uymak kullanıcının sorumluluğundadır.
 
 ---
 
