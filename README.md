@@ -2,11 +2,11 @@
 
 Bu depo, LNReader için hazırladığım Türkçe eklentileri içerir.
 
-> **Not:** Eklenti kaynak kodları `master`, derlenmiş eklentiler ise `plugins/v3.0.0` branch'indedir.
+> **Not:** Eklenti kaynak kodları `master` branch'inde, derlenmiş eklentiler ise `plugins/v3.0.0` branch'inde bulunmaktadır.
 
 Gelecekte daha fazla eklenti eklemeyi düşünüyorum.
 
-## Basitçe Kurulum
+## Basitçe Kurulum Adımları
 
 1. LNReader'ı açın.
 2. Alt menüden **Browse** (Gözat) sekmesine gidin.
@@ -20,7 +20,7 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 7. **Add** (Ekle) butonuna basın.
 8. **Plugins** (Eklentiler) sekmesine geçin ve son olarak kurmak istediğiniz eklentileri **Install** (Yükle) ile kurabilirsiniz.
 
-## Mevcut Eklentiler
+## Depoda Bulunan Eklentiler
 
 ### 1. NovZon
 * **Site:** `https://novzon.net`
@@ -29,8 +29,8 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 
 ## Sorumluluk Reddi
 
-Bu repo novel siteleri veya LNReader ile resmî olarak bağlantılı değildir.
+Bu repo novel kaynak siteleriyle veya LNReader ile resmî olarak bağlantılı değildir.
 
 ---
 
-*Bu eklenti(ler), Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
+*Bu depodaki eklenti(ler), Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
