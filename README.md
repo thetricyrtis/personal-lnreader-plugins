@@ -16,7 +16,7 @@ Gelecekte daha fazla eklenti eklemeyi düşüyorum.
    https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/.dist/plugins.min.json
 
 7. **Add** (Ekle) butonuna basın.
-8. **Plugins** (Eklentiler) sekmesine geçin ve son olaral kurmak istediğiniz eklentiyi **Install** (Yükle) ile kurabilirsiniz.
+8. **Plugins** (Eklentiler) sekmesine geçin ve son olarak kurmak istediğiniz eklentiyi **Install** (Yükle) ile kurabilirsiniz.
 
 ---
 
