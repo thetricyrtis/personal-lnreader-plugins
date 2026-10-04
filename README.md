@@ -27,7 +27,10 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 * **Dil:** Türkçe (TR)
 * **Sürüm:** v1.0.0
 
+## Sorumluluk Reddi
+
+Bu repo novel siteleri veya LNReader ile resmî olarak bağlantılı değildir.
 
 ---
 
-*Bu eklenti(ler) Claude (Anthropic) ile yazılmıştır.*
+*Bu eklenti(ler), Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
