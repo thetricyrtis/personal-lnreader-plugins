@@ -33,4 +33,4 @@ Bu repo novel kaynak siteleriyle veya LNReader ile resmî olarak bağlantılı d
 
 ---
 
-*Bu depodaki eklenti(ler), Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
+*Bu depodaki eklentiler, Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
