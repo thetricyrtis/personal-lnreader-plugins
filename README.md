@@ -20,6 +20,14 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 7. **Add** (Ekle) butonuna basın.
 8. **Plugins** (Eklentiler) sekmesine geçin ve son olarak kurmak istediğiniz eklentileri **Install** (Yükle) ile kurabilirsiniz.
 
+## Mevcut Eklentiler
+
+### 1. NovZon
+* **Site:** `https://novzon.net`
+* **Dil:** Türkçe (TR)
+* **Sürüm:** v1.0.0
+
+
 ---
 
 *Bu eklenti(ler) Claude (Anthropic) ile yazılmıştır.*
