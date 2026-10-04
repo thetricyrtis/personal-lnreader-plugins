@@ -4,7 +4,7 @@ Bu depo, LNReader için hazırladığım Türkçe eklentileri içerir.
 
 > **Not:** Eklenti kaynak kodları `master`, derlenmiş eklentiler ise `plugins/v3.0.0` branch'indedir.
 
-Gelecekte daha fazla eklenti eklemeyi düşüyorum.
+Gelecekte daha fazla eklenti eklemeyi düşünüyorum.
 
 ## Basitçe Kurulum
 
