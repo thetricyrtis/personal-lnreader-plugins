@@ -28,7 +28,7 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 
 ### 2. NovelTürk
 * **Site:** `https://novelturk.com`
-* **Sürüm:** v1.0.3
+* **Sürüm:** v1.0.4
 
 ## Sorumluluk Reddi
 
