@@ -37,7 +37,7 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   name = 'Novel Türk';
   icon = 'src/turkish/novelturk/icon.png';
   site = SITE;
-  version = '1.0.6';
+  version = '1.0.7';
 
   imageRequestInit: Plugin.ImageRequestInit = {
     headers: { Referer: SITE + '/', 'User-Agent': UA },
@@ -265,10 +265,10 @@ class NovelTurkPlugin implements Plugin.PluginBase {
 
       const referer = this.site + novelPath;
       let nonceRefreshed = false;
-      for (let g = 0; g < pending.length; g++) {
-        const group = pending[g];
-        let rows: Row[] | undefined;
 
+      // Tek bir grubu çeker; başarısızsa en fazla 3 kez dener
+      const loadGroup = async (group: string, g: number) => {
+        let rows: Row[] | undefined;
         for (let attempt = 0; attempt < 3 && !rows; attempt++) {
           try {
             if (!nonce) throw new Error('nonce yok');
@@ -278,27 +278,37 @@ class NovelTurkPlugin implements Plugin.PluginBase {
             lastError = e instanceof Error ? e.message : String(e);
             // Önbellekteki sayfanın nonce'ı bayatlamış olabilir: taze sayfadan al
             if (!nonceRefreshed || attempt === 1) {
+              nonceRefreshed = true;
               try {
                 const fresh = await this.get(
                   `${novelPath.replace(/\/$/, '')}/?_=${Date.now()}`,
                 );
                 nonce = this.nonceFrom(fresh) || nonce;
-                nonceRefreshed = true;
               } catch {
                 // taze sayfa alınamadı, aynı nonce ile devam
               }
             }
-            await sleep(600 * (attempt + 1));
+            await sleep(500 * (attempt + 1));
           }
         }
-
         if (rows) {
           loaded.push({ key: this.groupKey(group, 1e9 - 1 - g), rows });
         } else {
           failed.push(group);
         }
-        await sleep(250); // siteyi yormamak için gruplar arası bekleme
-      }
+      };
+
+      // Gruplar paralel (en fazla 3) çekilir; site de kendi sayfasında bunu yapıyor.
+      // İstekler 150 ms arayla başlatılır, böylece sunucuya ani yük binmez.
+      let next = 0;
+      const worker = async (w: number) => {
+        await sleep(w * 150);
+        while (next < pending.length) {
+          const g = next++;
+          await loadGroup(pending[g], g);
+        }
+      };
+      await Promise.all([0, 1, 2].map(worker));
     }
 
     // Eksik grup varsa sessizce kısa liste göstermek yerine hata ver
