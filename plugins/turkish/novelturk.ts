@@ -37,7 +37,7 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   name = 'Novel Türk';
   icon = 'src/turkish/novelturk/icon.png';
   site = SITE;
-  version = '1.2.0';
+  version = '1.0.5';
 
   imageRequestInit: Plugin.ImageRequestInit = {
     headers: { Referer: SITE + '/', 'User-Agent': UA },
