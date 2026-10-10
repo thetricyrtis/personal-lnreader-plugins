@@ -35,9 +35,9 @@ type GroupRows = { key: number; rows: Row[] };
 class NovelTurkPlugin implements Plugin.PluginBase {
   id = 'novelturk';
   name = 'Novel Türk';
-  icon = 'src/turkish/novelturk/icon.png';
+  icon = 'src/tr/novelturk/icon.png';
   site = SITE;
-  version = '1.0.5';
+  version = '1.2.1';
 
   imageRequestInit: Plugin.ImageRequestInit = {
     headers: { Referer: SITE + '/', 'User-Agent': UA },
@@ -80,18 +80,31 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     return res.text();
   }
 
-  private async post(body: Record<string, string>): Promise<string> {
-    const res = await fetchApi(AJAX, {
-      method: 'POST',
-      headers: {
-        ...BASE_HEADERS,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        Referer: SITE + '/',
-      },
-      body: new URLSearchParams(body).toString(),
-    });
-    if (!res.ok) throw new Error(`NovelTürk AJAX HTTP ${res.status}`);
+  // WordPress admin-ajax hem POST hem GET kabul eder; tarayıcı gibi Origin/Referer gönderilir
+  private async post(
+    body: Record<string, string>,
+    referer: string = SITE + '/',
+    useGet = false,
+  ): Promise<string> {
+    const qs = new URLSearchParams(body).toString();
+    const headers: Record<string, string> = {
+      ...BASE_HEADERS,
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      'X-Requested-With': 'XMLHttpRequest',
+      Origin: SITE,
+      Referer: referer,
+    };
+    const res = useGet
+      ? await fetchApi(`${AJAX}?${qs}`, { headers })
+      : await fetchApi(AJAX, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          },
+          body: qs,
+        });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   }
 
@@ -178,21 +191,24 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     novelId: string,
     group: string,
     nonce: string,
+    referer: string,
+    useGet: boolean,
   ): Promise<Row[]> {
-    const raw = await this.post({
-      action: 'nt_load_chapter_group',
-      novel_id: novelId,
-      group,
-      nonce,
-    });
+    const raw = await this.post(
+      { action: 'nt_load_chapter_group', novel_id: novelId, group, nonce },
+      referer,
+      useGet,
+    );
     let data: any;
     try {
       data = JSON.parse(raw);
     } catch {
-      throw new Error('geçersiz yanıt');
+      throw new Error(`geçersiz yanıt: ${raw.slice(0, 60).replace(/\s+/g, ' ')}`);
     }
     if (!data?.success || typeof data.data?.html !== 'string') {
-      throw new Error('grup reddedildi');
+      const why =
+        typeof data?.data === 'string' ? data.data : JSON.stringify(data).slice(0, 60);
+      throw new Error(`reddedildi: ${why}`);
     }
     const rows = this.rowsFrom(data.data.html);
     if (!rows.length) throw new Error('boş grup');
@@ -242,10 +258,12 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     const novelId = html.match(/NT_NOVEL_ID\s*=\s*(\d+)/)?.[1];
     let nonce = this.nonceFrom(html);
     const failed: string[] = [];
+    let lastError = '';
 
     if (pending.length) {
       if (!novelId) throw new Error('Roman kimliği bulunamadı (site yapısı değişmiş olabilir).');
 
+      const referer = this.site + novelPath;
       let nonceRefreshed = false;
       for (let g = 0; g < pending.length; g++) {
         const group = pending[g];
@@ -254,8 +272,10 @@ class NovelTurkPlugin implements Plugin.PluginBase {
         for (let attempt = 0; attempt < 3 && !rows; attempt++) {
           try {
             if (!nonce) throw new Error('nonce yok');
-            rows = await this.fetchGroup(novelId, group, nonce);
-          } catch {
+            // Son denemede POST yerine GET dene (admin-ajax ikisini de kabul eder)
+            rows = await this.fetchGroup(novelId, group, nonce, referer, attempt === 2);
+          } catch (e) {
+            lastError = e instanceof Error ? e.message : String(e);
             // Önbellekteki sayfanın nonce'ı bayatlamış olabilir: taze sayfadan al
             if (!nonceRefreshed || attempt === 1) {
               try {
@@ -285,7 +305,7 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     if (failed.length) {
       const got = loaded.reduce((n, g) => n + g.rows.length, 0);
       throw new Error(
-        `Bölümlerin bir kısmı yüklenemedi (${got}/${expected || '?'}; eksik aralık: ${failed.join(', ')}). Lütfen tekrar deneyin.`,
+        `Bölümlerin bir kısmı yüklenemedi (${got}/${expected || '?'}; eksik aralık: ${failed.join(', ')}; neden: ${lastError || '?'}). Lütfen tekrar deneyin.`,
       );
     }
 
