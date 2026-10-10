@@ -35,7 +35,7 @@ type GroupRows = { key: number; rows: Row[] };
 class NovelTurkPlugin implements Plugin.PluginBase {
   id = 'novelturk';
   name = 'Novel Türk';
-  icon = 'src/tr/novelturk/icon.png';
+  icon = 'src/turkish/novelturk/icon.png';
   site = SITE;
   version = '1.2.0';
 
