@@ -1,0 +1,20 @@
+[
+	{
+		"id": "novelturk",
+		"name": "Novel Türk",
+		"site": "https://novelturk.com",
+		"lang": "Türkçe",
+		"version": "1.0.7",
+		"url": "https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/.js/src/plugins/turkish/novelturk.js",
+		"iconUrl": "https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/public/static/src/turkish/novelturk/icon.png"
+	},
+	{
+		"id": "novzon",
+		"name": "NovZon",
+		"site": "https://novzon.net",
+		"lang": "Türkçe",
+		"version": "1.0.0",
+		"url": "https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/.js/src/plugins/turkish/novzon.js",
+		"iconUrl": "https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/public/static/src/turkish/novzon/icon.png"
+	}
+]
