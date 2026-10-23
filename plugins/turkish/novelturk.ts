@@ -468,7 +468,8 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     let content = '';
     let id: string | undefined;
     let readerNonce: string | undefined;
-    let lastError = '';
+    const notes: string[] = [];
+    const note = (step: string, m: string) => notes.push(`${step}: ${m}`);
 
     // 1) Bölüm sayfası: metin artık sayfada hazır gelmiyor ("güvenli yükleniyor"
     //    yer tutucusu), ama bölüm kimliği ve olası gömülü metin buradan alınır.
@@ -488,8 +489,10 @@ class NovelTurkPlugin implements Plugin.PluginBase {
       readerNonce = html.match(
         /webnovelReader\s*=\s*\{[^}]*?"nonce"\s*:\s*"([A-Za-z0-9]+)"/,
       )?.[1];
+      if (!id) note('sayfa', 'bölüm kimliği bulunamadı');
+      if (!readerNonce) note('sayfa', 'nonce bulunamadı');
     } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
+      note('sayfa', e instanceof Error ? e.message : String(e));
     }
 
     // 2) Sitenin kendi okuyucu isteği: admin-ajax "webnovel_get_chapter".
@@ -504,13 +507,15 @@ class NovelTurkPlugin implements Plugin.PluginBase {
         if (data?.success && typeof data.data?.content === 'string') {
           content = this.decodeB64Utf8(data.data.content);
         } else if (data?.data?.code === 'turnstile_required') {
-          lastError =
-            'Site bu bölüm için Cloudflare Turnstile doğrulaması istiyor. Bölümü WebView\'da açıp "Devam etmek için doğrulama gerekiyor" kutusunu geçin, metin yüklenince geri dönüp tekrar deneyin.';
+          note(
+            'ajax',
+            'Site bu bölüm için Cloudflare Turnstile doğrulaması istiyor. Bölümü WebView\'da açıp "Devam etmek için doğrulama gerekiyor" kutusunu geçin, metin yüklenince geri dönüp tekrar deneyin.',
+          );
         } else {
-          lastError = `Bölüm reddedildi: ${raw.slice(0, 80).replace(/\s+/g, ' ')}`;
+          note('ajax', `reddedildi: ${raw.slice(0, 80).replace(/\s+/g, ' ')}`);
         }
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
+        note('ajax', e instanceof Error ? e.message : String(e));
       }
     }
 
@@ -531,11 +536,11 @@ class NovelTurkPlugin implements Plugin.PluginBase {
           });
           const raw = await res.text();
           if (isChallenge(res, raw)) {
-            lastError = CF_HINT;
+            note('rest', CF_HINT);
             continue;
           }
           if (!res.ok) {
-            lastError = `Bölüm alınamadı (HTTP ${res.status})`;
+            note('rest', `HTTP ${res.status}`);
             continue;
           }
           const data = JSON.parse(raw);
@@ -545,17 +550,16 @@ class NovelTurkPlugin implements Plugin.PluginBase {
             content = rendered;
             break;
           }
-          lastError = 'Bölüm içeriği boş';
+          note('rest', 'içerik boş');
         } catch (e) {
-          lastError = e instanceof Error ? e.message : String(e);
+          note('rest', e instanceof Error ? e.message : String(e));
         }
       }
     }
 
     if (!content || content.length < 100) {
       throw new Error(
-        lastError ||
-          'Bölüm içeriği alınamadı (site metni artık doğrulama arkasında yüklüyor olabilir).',
+        `Bölüm metni alınamadı → ${notes.join(' | ') || 'bilinmeyen neden'}`,
       );
     }
 
