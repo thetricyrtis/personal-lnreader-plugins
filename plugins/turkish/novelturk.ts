@@ -48,7 +48,7 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   name = 'Novel Türk';
   icon = 'src/turkish/novelturk/icon.png';
   site = SITE;
-  version = '1.0.8';
+  version = '1.0.9';
 
   imageRequestInit: Plugin.ImageRequestInit = {
     headers: { Referer: SITE + '/' },
