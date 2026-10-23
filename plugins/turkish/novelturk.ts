@@ -8,13 +8,24 @@ import { NovelStatus } from '@libs/novelStatus';
 const SITE = 'https://novelturk.com';
 const AJAX = SITE + '/wp-admin/admin-ajax.php';
 
-// Gizlilik: cihaz modeli/build bilgisi içermeyen, Chrome'un "azaltılmış" UA biçimi
-const UA =
-  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36';
+// ÖNEMLİ: User-Agent bilerek gönderilmiyor. Cloudflare doğrulaması (cf_clearance çerezi)
+// WebView'da çözüldüğü User-Agent'a bağlıdır; farklı bir UA göndermek doğrulamanın her
+// istekte yeniden istenmesine yol açar. UA'yı LNReader kendi varsayılanıyla ekler.
 const BASE_HEADERS: Record<string, string> = {
-  'User-Agent': UA,
   'Accept-Language': 'tr-TR,tr;q=0.9',
 };
+
+const CF_HINT =
+  'Cloudflare doğrulaması gerekiyor. Roman sayfasının sağ üstündeki "WebView" (dünya) simgesine dokunup siteyi açın, doğrulamayı geçin ve tekrar deneyin.';
+
+// Cloudflare "Just a moment..." / yönetilen doğrulama sayfası mı?
+const isChallenge = (res: Response, body = '') =>
+  res.headers?.get?.('cf-mitigated') === 'challenge' ||
+  ((res.status === 403 || res.status === 503) &&
+    /just a moment|challenge-platform|cf-chl|cf-turnstile|attention required/i.test(
+      body.slice(0, 6000),
+    )) ||
+  (res.status === 200 && /<title>\s*just a moment/i.test(body.slice(0, 2000)));
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
@@ -37,10 +48,10 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   name = 'Novel Türk';
   icon = 'src/turkish/novelturk/icon.png';
   site = SITE;
-  version = '1.0.7';
+  version = '1.0.8';
 
   imageRequestInit: Plugin.ImageRequestInit = {
-    headers: { Referer: SITE + '/', 'User-Agent': UA },
+    headers: { Referer: SITE + '/' },
   };
 
   filters = {
@@ -74,10 +85,14 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   }
 
   private async get(path: string, allow404 = false): Promise<string> {
-    const res = await fetchApi(this.site + path, { headers: BASE_HEADERS });
+    const res = await fetchApi(this.site + path, {
+      headers: { ...BASE_HEADERS, Referer: SITE + '/' },
+    });
     if (allow404 && res.status === 404) return '';
+    const text = await res.text();
+    if (isChallenge(res, text)) throw new Error(CF_HINT);
     if (!res.ok) throw new Error(`NovelTürk HTTP ${res.status}`);
-    return res.text();
+    return text;
   }
 
   // WordPress admin-ajax hem POST hem GET kabul eder; tarayıcı gibi Origin/Referer gönderilir
@@ -104,8 +119,10 @@ class NovelTurkPlugin implements Plugin.PluginBase {
           },
           body: qs,
         });
+    const text = await res.text();
+    if (isChallenge(res, text)) throw new Error(CF_HINT);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.text();
+    return text;
   }
 
   // "3 Gün" → ISO tarih. Çözülemezse undefined.
@@ -334,6 +351,40 @@ class NovelTurkPlugin implements Plugin.PluginBase {
     return all.map((c, i) => ({ ...c, chapterNumber: i + 1 }));
   }
 
+  // base64 → UTF-8 metin (atob/TextDecoder her ortamda yok, elle çözülür)
+  private decodeB64Utf8(b64: string): string {
+    const tbl = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
+    const bytes: number[] = [];
+    let buf = 0;
+    let bits = 0;
+    for (const ch of clean) {
+      buf = (buf << 6) | tbl.indexOf(ch);
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        bytes.push((buf >> bits) & 0xff);
+      }
+    }
+    let out = '';
+    for (let i = 0; i < bytes.length; ) {
+      const b = bytes[i++];
+      let cp: number;
+      if (b < 0x80) cp = b;
+      else if (b < 0xe0) cp = ((b & 0x1f) << 6) | (bytes[i++] & 0x3f);
+      else if (b < 0xf0)
+        cp = ((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+      else
+        cp =
+          ((b & 0x07) << 18) |
+          ((bytes[i++] & 0x3f) << 12) |
+          ((bytes[i++] & 0x3f) << 6) |
+          (bytes[i++] & 0x3f);
+      out += String.fromCodePoint(cp);
+    }
+    return out;
+  }
+
   // ---------- Plugin API ----------
   async popularNovels(
     pageNo: number,
@@ -412,25 +463,100 @@ class NovelTurkPlugin implements Plugin.PluginBase {
   }
 
   async parseChapter(chapterPath: string): Promise<string> {
-    const html = await this.get(chapterPath);
-    const $ = parseHTML(html);
+    const referer = this.site + chapterPath;
+    const slug = chapterPath.replace(/\/$/, '').split('/').pop() || '';
+    let content = '';
+    let id: string | undefined;
+    let readerNonce: string | undefined;
+    let lastError = '';
 
-    let content = $('#reader-text').first().html() || '';
-    if (content.length < 200 || /yükleniyor/i.test(content)) {
-      const id =
-        $('#reader-text').attr('data-chapter-id') ||
-        html.match(/wp\/v2\/chapter\/(\d+)/)?.[1];
-      if (!id) throw new Error('Bölüm içeriği bulunamadı');
-      const res = await fetchApi(
-        `${this.site}/wp-json/wp/v2/chapter/${id}?_fields=content`,
-        { headers: { ...BASE_HEADERS, Accept: 'application/json' } },
-      );
-      if (!res.ok) throw new Error(`Bölüm alınamadı (HTTP ${res.status})`);
-      const data = await res.json();
-      content = data?.content?.rendered || '';
+    // 1) Bölüm sayfası: metin artık sayfada hazır gelmiyor ("güvenli yükleniyor"
+    //    yer tutucusu), ama bölüm kimliği ve olası gömülü metin buradan alınır.
+    try {
+      const html = await this.get(chapterPath);
+      const $ = parseHTML(html);
+      const el = $('#reader-text').first();
+      const inline = el.html() || '';
+      if (inline.length >= 200 && !/güvenli bir şekilde yükleniyor|yükleniyor\.\.\./i.test(inline)) {
+        content = inline;
+      }
+      id =
+        el.attr('data-chapter-id') ||
+        html.match(/webnovelReader\s*=\s*\{[^}]*?"chapterId"\s*:\s*"(\d+)"/)?.[1] ||
+        html.match(/wp\/v2\/chapter\/(\d+)/)?.[1] ||
+        undefined;
+      readerNonce = html.match(
+        /webnovelReader\s*=\s*\{[^}]*?"nonce"\s*:\s*"([A-Za-z0-9]+)"/,
+      )?.[1];
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
     }
+
+    // 2) Sitenin kendi okuyucu isteği: admin-ajax "webnovel_get_chapter".
+    //    Yanıttaki data.content base64 (UTF-8) kodludur.
+    if (!content && id && readerNonce) {
+      try {
+        const raw = await this.post(
+          { action: 'webnovel_get_chapter', chapter_id: id, nonce: readerNonce },
+          referer,
+        );
+        const data = JSON.parse(raw);
+        if (data?.success && typeof data.data?.content === 'string') {
+          content = this.decodeB64Utf8(data.data.content);
+        } else if (data?.data?.code === 'turnstile_required') {
+          lastError =
+            'Site bu bölüm için Cloudflare Turnstile doğrulaması istiyor. Bölümü WebView\'da açıp "Devam etmek için doğrulama gerekiyor" kutusunu geçin, metin yüklenince geri dönüp tekrar deneyin.';
+        } else {
+          lastError = `Bölüm reddedildi: ${raw.slice(0, 80).replace(/\s+/g, ' ')}`;
+        }
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+      }
+    }
+
+    // 3) WordPress REST: önce kimlikle, olmazsa slug ile (sayfa alınamadıysa da çalışır)
+    if (!content) {
+      const urls = [
+        ...(id ? [`${this.site}/wp-json/wp/v2/chapter/${id}?_fields=content`] : []),
+        `${this.site}/wp-json/wp/v2/chapter?slug=${encodeURIComponent(slug)}&_fields=content`,
+      ];
+      for (const url of urls) {
+        try {
+          const res = await fetchApi(url, {
+            headers: {
+              ...BASE_HEADERS,
+              Accept: 'application/json',
+              Referer: referer,
+            },
+          });
+          const raw = await res.text();
+          if (isChallenge(res, raw)) {
+            lastError = CF_HINT;
+            continue;
+          }
+          if (!res.ok) {
+            lastError = `Bölüm alınamadı (HTTP ${res.status})`;
+            continue;
+          }
+          const data = JSON.parse(raw);
+          const item = Array.isArray(data) ? data[0] : data;
+          const rendered: string = item?.content?.rendered || '';
+          if (rendered.length >= 100) {
+            content = rendered;
+            break;
+          }
+          lastError = 'Bölüm içeriği boş';
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e);
+        }
+      }
+    }
+
     if (!content || content.length < 100) {
-      throw new Error('Bölüm içeriği boş');
+      throw new Error(
+        lastError ||
+          'Bölüm içeriği alınamadı (site metni artık doğrulama arkasında yüklüyor olabilir).',
+      );
     }
 
     const $c = parseHTML(`<div id="c">${content}</div>`);
@@ -447,4 +573,5 @@ class NovelTurkPlugin implements Plugin.PluginBase {
 }
 
 export default new NovelTurkPlugin();
+
 
