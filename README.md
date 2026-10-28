@@ -31,7 +31,7 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 * **Sürüm:** v1.0.9
 
 ### 3. NovelGecesi
-* **Site:** `novelgecesi.com`
+* **Site:** `https://novelgecesi.com`
 * **Sürüm:** v1.0.0
 
 ## Sorumluluk Reddi
