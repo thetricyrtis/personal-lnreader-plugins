@@ -6,13 +6,15 @@ import { NovelStatus } from '@libs/novelStatus';
 
 const SITE = 'https://novzon.net';
 
-// Gizlilik: cihaz modeli/build bilgisi içermeyen, Chrome'un "azaltılmış" UA biçimi
-const UA =
-  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36';
+// User-Agent bilerek gönderilmiyor: LNReader kendi varsayılanını ekler. Böylece WebView'da
+// çözülen Cloudflare doğrulaması (cf_clearance çerezi) eklenti istekleriyle de eşleşir.
 const HEADERS: Record<string, string> = {
-  'User-Agent': UA,
   'Accept-Language': 'tr-TR,tr;q=0.9',
+  Referer: SITE + '/',
 };
+
+const CF_HINT =
+  'Cloudflare doğrulaması gerekiyor. WebView simgesine dokunup siteyi açın, doğrulamayı geçin ve tekrar deneyin.';
 
 // Sitedeki tarihler "18 Ağu 2026" biçiminde (Türkçe kısa ay adı)
 const MONTHS: Record<string, string> = {
@@ -29,19 +31,37 @@ const MONTHS: Record<string, string> = {
   kas: '11',
   ara: '12',
 };
-const DATE_RE = /^(\d{1,2})\s+(\S+)\s+(\d{4})$/;
+const DATE_RE = /^(\d{1,2})\s+(\S+?)\.?\s+(\d{4})$/;
+
+// Botlar için konmuş gizli tuzak bağlantılar (/c/...) ve yardımcı öğeler
+const JUNK_SELECTOR = [
+  'a[data-sentinel-guard]',
+  'a[href^="/c/"]',
+  '#chapter-content-end-sentinel',
+  'script',
+  'style',
+  'noscript',
+  '[style*="-9999px"]',
+].join(', ');
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+const isChallenge = (res: Response, body: string) =>
+  res.headers?.get?.('cf-mitigated') === 'challenge' ||
+  ((res.status === 403 || res.status === 503) &&
+    /just a moment|challenge-platform|cf-chl|cf-turnstile|attention required/i.test(
+      body.slice(0, 6000),
+    ));
 
 class NovZonPlugin implements Plugin.PluginBase {
   id = 'novzon';
   name = 'NovZon';
   icon = 'src/turkish/novzon/icon.png';
   site = SITE;
-  version = '1.0.1';
+  version = '1.0.2';
 
   imageRequestInit: Plugin.ImageRequestInit = {
-    headers: { Referer: SITE + '/', 'User-Agent': UA },
+    headers: { Referer: SITE + '/' },
   };
 
   // ---------- yardımcılar ----------
@@ -57,31 +77,36 @@ class NovZonPlugin implements Plugin.PluginBase {
     return href.replace(this.site, '').split('#')[0];
   }
 
-  // Geçici hatalarda (ağ kopması, 5xx) bir kez daha dener; 4xx hemen hata verir
+  // Geçici hatalarda (ağ kopması, 429, 5xx) en fazla 3 kez dener; diğer 4xx hemen hata verir.
+  // Cloudflare doğrulaması algılanırsa tekrar denemeden açıklayıcı hata verir.
   private async getHtml(path: string): Promise<string> {
     let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await fetchApi(this.site + path, { headers: HEADERS });
-        if (res.ok) return await res.text();
+        const text = await res.text();
+        if (res.ok) return text;
+        if (isChallenge(res, text)) throw new Error(CF_HINT);
         lastError = new Error(
           `NovZon isteği başarısız oldu (HTTP ${res.status})`,
         );
-        if (res.status < 500) break;
+        if (res.status < 500 && res.status !== 429) break;
       } catch (e) {
         lastError = e;
+        if (e instanceof Error && e.message === CF_HINT) break;
       }
-      await sleep(400);
+      await sleep(400 * (attempt + 1));
     }
     throw lastError instanceof Error
       ? lastError
       : new Error('NovZon isteği başarısız oldu');
   }
 
+  // "18 Ağu 2026" / "18 Ağustos 2026" → "2026-08-18"
   private parseDate(text: string): string | undefined {
     const m = text.trim().toLowerCase().match(DATE_RE);
     if (!m) return undefined;
-    const month = MONTHS[m[2]];
+    const month = MONTHS[m[2].slice(0, 3)];
     if (!month) return undefined;
     return `${m[3]}-${month}-${m[1].padStart(2, '0')}`;
   }
@@ -111,12 +136,13 @@ class NovZonPlugin implements Plugin.PluginBase {
       ).trim();
       if (!name) return;
 
+      const img = $el.find('img').first();
       seen.add(path);
       novels.push({
         name,
         path,
         cover:
-          this.absUrl($el.find('img').first().attr('src')) || defaultCover,
+          this.absUrl(img.attr('src') || img.attr('data-src')) || defaultCover,
       });
     });
 
@@ -156,43 +182,16 @@ class NovZonPlugin implements Plugin.PluginBase {
   async parseNovel(novelPath: string): Promise<Plugin.SourceNovel> {
     const $ = parseHTML(await this.getHtml(novelPath));
 
-    const novel: Plugin.SourceNovel = {
-      path: novelPath,
-      name:
-        $('h1.novel-title').first().text().trim() ||
-        $('title').first().text().trim() ||
-        'Başlıksız',
-      cover:
-        this.absUrl($('meta[property="og:image"]').attr('content')) ||
-        this.absUrl($('img.novel-cover').first().attr('src')) ||
-        defaultCover,
-      chapters: [],
-    };
-
-    novel.author = $('a.author-tag').first().text().trim() || undefined;
-
-    novel.genres =
-      $('.meta-tags a[href^="/category/"]')
-        .map((_, el) => $(el).text().trim())
-        .get()
-        .filter(Boolean)
-        .join(', ') || undefined;
-
     const paragraphs = $('#novelDesc p')
       .map((_, el) => $(el).text().trim())
       .get()
       .filter(Boolean);
-    novel.summary = paragraphs.length
-      ? paragraphs.join('\n\n')
-      : $('#novelDesc').text().trim() || undefined;
 
     // Site "Published" yazıyor: cilt yayımlanmış/tamamlanmış demek
     const statusText = $('.status-tag').first().text().trim().toLowerCase();
-    novel.status = statusText.includes('published')
-      ? NovelStatus.Completed
-      : NovelStatus.Unknown;
 
     // Tüm bölümler (gizli sekmeler dahil) tek sayfada HTML olarak geliyor
+    const chapters: Plugin.ChapterItem[] = [];
     const seen = new Set<string>();
     $('a.chapter-item').each((_, el) => {
       const $el = $(el);
@@ -202,9 +201,9 @@ class NovZonPlugin implements Plugin.PluginBase {
 
       const number = $el.find('.chapter-number').text().trim();
       const title = $el.find('.chapter-title').text().trim();
-      const index = novel.chapters.length + 1;
+      const index = chapters.length + 1;
 
-      novel.chapters.push({
+      chapters.push({
         name: [number, title].filter(Boolean).join(' - ') || `Bölüm ${index}`,
         path,
         releaseTime: this.parseDate($el.find('.chapter-date').text()),
@@ -213,7 +212,31 @@ class NovZonPlugin implements Plugin.PluginBase {
       });
     });
 
-    return novel;
+    return {
+      path: novelPath,
+      name:
+        $('h1.novel-title').first().text().trim() ||
+        $('title').first().text().trim() ||
+        'Başlıksız',
+      cover:
+        this.absUrl($('meta[property="og:image"]').attr('content')) ||
+        this.absUrl($('img.novel-cover').first().attr('src')) ||
+        defaultCover,
+      author: $('a.author-tag').first().text().trim() || undefined,
+      genres:
+        $('.meta-tags a[href^="/category/"]')
+          .map((_, el) => $(el).text().trim())
+          .get()
+          .filter(Boolean)
+          .join(', ') || undefined,
+      summary: paragraphs.length
+        ? paragraphs.join('\n\n')
+        : $('#novelDesc').text().trim() || undefined,
+      status: statusText.includes('published')
+        ? NovelStatus.Completed
+        : NovelStatus.Unknown,
+      chapters,
+    };
   }
 
   // ---------- bölüm içeriği ----------
@@ -227,24 +250,11 @@ class NovZonPlugin implements Plugin.PluginBase {
       );
     }
 
-    // Botlar için konmuş gizli tuzak bağlantılar (/c/...) ve yardımcı öğeler
-    root
-      .find(
-        [
-          'a[data-sentinel-guard]',
-          'a[href^="/c/"]',
-          '#chapter-content-end-sentinel',
-          'script',
-          'style',
-          'noscript',
-          '[style*="-9999px"]',
-        ].join(', '),
-      )
-      .remove();
+    root.find(JUNK_SELECTOR).remove();
 
     // Metin içi resimlerin yolları göreli
     root.find('img').each((_, el) => {
-      const src = this.absUrl($(el).attr('src'));
+      const src = this.absUrl($(el).attr('src') || $(el).attr('data-src'));
       if (src) $(el).attr('src', src);
       $(el).removeAttr('srcset');
     });
