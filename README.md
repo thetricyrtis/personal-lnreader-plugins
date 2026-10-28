@@ -30,6 +30,10 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 * **Site:** `https://novelturk.com`
 * **Sürüm:** v1.0.9
 
+### 3. NovelGecesi
+* **Site:** 'novelgecesi.com'
+* **Sürüm:** v1.0.0
+
 ## Sorumluluk Reddi
 
 Bu repo, eklentilerin eriştiği kaynak sitelerle veya LNReader ile resmî olarak bağlantılı değildir.
