@@ -3,6 +3,7 @@ import { Plugin } from '@/types/plugin';
 import { load as parseHTML } from 'cheerio';
 import { defaultCover } from '@libs/defaultCover';
 import { NovelStatus } from '@libs/novelStatus';
+import { FilterTypes, Filters } from '@libs/filterInputs';
 
 const SITE = 'https://www.novelgecesi.com';
 
@@ -24,6 +25,69 @@ const isChallenge = (res: Response, body: string) =>
       body.slice(0, 6000),
     ));
 
+// /seriler sayfasındaki filtre değerleri (sitedeki <select> ve checkbox değerleriyle birebir aynı)
+// DOĞRULANMADI: Tür ve izlenme filtrelerinin URL parametre adları. Doğrulananlar: sort, status, page.
+// Sitede bir tür seçip "Uygula"ya basınca adres çubuğundaki adı görüp gerekirse buradan değiştirin.
+const GENRE_PARAM = 'category';
+const VIEWS_PARAM = 'views';
+
+const GENRES = [
+  'Aksiyon',
+  'Bilim Kurgu',
+  'Doğaüstü',
+  'Dövüş Sanatları',
+  'Dram',
+  'Ecchi',
+  'Fantastik',
+  'Gerilim',
+  'Gizem',
+  'Harem',
+  'Isekai',
+  'Josei',
+  'Komedi',
+  'Korku',
+  'Macera',
+  'Mecha',
+  'Mizah',
+  'Müzik',
+  'Okul hayatı',
+  'Orijinal Çeviri',
+  'Polisiye',
+  'Psikolojik',
+  'Romantizim',
+  'Seinen',
+  'Shoujo',
+  'Shounen',
+  'Smut',
+  'Spor',
+  'Tarihi',
+  'Yaşamdan Kesitler',
+  'Yetişkin',
+  'Yuri',
+  'Xianxia',
+  'Xuanhuan',
+  'Wuxia',
+];
+
+// Arama için: küçük harfe çevir, Türkçe harfleri sadeleştir ("Işık" ve "isik" eşleşsin)
+const fold = (s: string) =>
+  s
+    .replace(/İ/g, 'i')
+    .replace(/I/g, 'i')
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ö/g, 'o')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const INDEX_TTL = 15 * 60 * 1000; // arama dizini 15 dakika önbellekte kalır
+const MAX_INDEX_PAGES = 40; // güvenlik sınırı
+
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 // Metin temizleme (fazla boşlukları sil)
@@ -44,11 +108,53 @@ class NovelGecesiPlugin implements Plugin.PluginBase {
   name = 'Novel Gecesi';
   icon = 'src/turkish/novelgecesi/icon.png';
   site = SITE;
-  version = '1.0.0';
+  version = '1.0.1';
 
   imageRequestInit: Plugin.ImageRequestInit = {
     headers: { Referer: SITE + '/' },
   };
+
+  filters = {
+    sort: {
+      label: 'Sırala',
+      type: FilterTypes.Picker,
+      value: 'popular',
+      options: [
+        { label: 'En Popüler', value: 'popular' },
+        { label: 'En Yeni', value: 'newest' },
+        { label: 'En Eski', value: 'oldest' },
+        { label: 'En Yüksek Puan', value: 'rating' },
+      ],
+    },
+    genres: {
+      label: 'Tür',
+      type: FilterTypes.CheckboxGroup,
+      value: [],
+      options: GENRES.map(g => ({ label: g, value: g })),
+    },
+    status: {
+      label: 'Durum',
+      type: FilterTypes.Picker,
+      value: 'all',
+      options: [
+        { label: 'Tümü', value: 'all' },
+        { label: 'Devam Ediyor', value: 'Devam Ediyor' },
+        { label: 'Tamamlandı', value: 'Tamamlandı' },
+        { label: 'Askıda', value: 'Askıda' },
+        { label: 'Bırakıldı', value: 'Bırakıldı' },
+      ],
+    },
+    views: {
+      label: 'İzlenme',
+      type: FilterTypes.Picker,
+      value: 'all',
+      options: [
+        { label: 'Tümü', value: 'all' },
+        { label: 'En Çok İzlenen', value: 'most' },
+        { label: 'En Az İzlenen', value: 'least' },
+      ],
+    },
+  } satisfies Filters;
 
   // ---------------------------------------------------------------- yardımcılar
 
@@ -121,7 +227,7 @@ class NovelGecesiPlugin implements Plugin.PluginBase {
     const novels: Plugin.NovelItem[] = [];
     const seen = new Set<string>();
 
-    $('article.series-card').each((_, el) => {
+    $('.series-card').each((_, el) => {
       const $el = $(el);
       const href =
         $el.find('.series-title a').first().attr('href') ||
@@ -149,24 +255,126 @@ class NovelGecesiPlugin implements Plugin.PluginBase {
 
   // ------------------------------------------------------------ listeleme
 
-  async popularNovels(pageNo: number): Promise<Plugin.NovelItem[]> {
-    const path = pageNo > 1 ? `/?page=${pageNo}` : '/';
-    const html = await this.getHtml(path);
+  // Sayfalı listelerde (liste ve arama) istenen sayfa gerçekten açıldı mı?
+  // Site sayfa dışına çıkılırsa son/ilk sayfayı tekrar döndürebilir; bu sonsuz döngüyü engeller.
+  private isRequestedPage(html: string, pageNo: number): boolean {
+    const $ = parseHTML(html);
+    return clean($('.pagination-btn.active').first().text()) === String(pageNo);
+  }
 
-    // Site son sayfayı tekrar döndürürse sonsuz döngüyü engelle
-    if (pageNo > 1) {
-      const $ = parseHTML(html);
-      const active = clean($('.pagination-btn.active').first().text());
-      if (active && active !== String(pageNo)) return [];
+  async popularNovels(
+    pageNo: number,
+    { filters, showLatestNovels }: Plugin.PopularNovelsOptions<typeof this.filters>,
+  ): Promise<Plugin.NovelItem[]> {
+    let path: string;
+
+    if (showLatestNovels) {
+      // "Son güncellenenler": ana sayfadaki Yeni Bölümler listesi
+      path = pageNo > 1 ? `/?page=${pageNo}` : '/';
+    } else {
+      // Filtreli liste: /seriler?sort=...&status=...&page=...
+      const params: string[] = [];
+      const sort = filters?.sort?.value;
+      const genres = filters?.genres?.value;
+      const status = filters?.status?.value;
+      const views = filters?.views?.value;
+
+      if (sort && sort !== 'popular') params.push('sort=' + encodeURIComponent(sort));
+      if (genres?.length) params.push(GENRE_PARAM + '=' + encodeURIComponent(genres.join(',')));
+      if (status && status !== 'all') params.push('status=' + encodeURIComponent(status));
+      if (views && views !== 'all') params.push(VIEWS_PARAM + '=' + encodeURIComponent(views));
+      if (pageNo > 1) params.push('page=' + pageNo);
+
+      path = '/seriler' + (params.length ? '?' + params.join('&') : '');
     }
+
+    const html = await this.getHtml(path);
+    if (pageNo > 1 && !this.isRequestedPage(html, pageNo)) return [];
 
     return this.novelsFrom(html);
   }
 
+  // ------------------------------------------------------------ arama
+  // Sitenin arama çubuğu JavaScript ile canlı çalışıyor, ayrı bir sonuç sayfası yok.
+  // Bu yüzden "Tüm Seriler" (/seriler) sayfalarındaki kartlardan bir dizin çıkarılır,
+  // arama bu dizinde yapılır. Dizin bellekte önbelleğe alınır, her aramada yeniden çekilmez.
+  private seriesIndex: { at: number; items: Plugin.NovelItem[] } | null = null;
+  private indexPromise: Promise<Plugin.NovelItem[]> | null = null;
+
+  private async buildIndex(): Promise<Plugin.NovelItem[]> {
+    const first = await this.getHtml('/seriler');
+    const $ = parseHTML(first);
+    const last = $('.pagination-btn')
+      .map((_, el) => parseInt(clean($(el).text()), 10))
+      .get()
+      .filter(n => Number.isFinite(n));
+    const totalPages = Math.min(Math.max(1, ...last), MAX_INDEX_PAGES);
+
+    const items = this.novelsFrom(first);
+    const seen = new Set(items.map(n => n.path));
+
+    // Kalan sayfalar 4'erli gruplar halinde çekilir
+    for (let start = 2; start <= totalPages; start += 4) {
+      const batch: Promise<Plugin.NovelItem[]>[] = [];
+      for (let p = start; p < start + 4 && p <= totalPages; p++) {
+        batch.push(
+          this.getHtml(`/seriler?page=${p}`)
+            .then(html => this.novelsFrom(html))
+            .catch(e => {
+              if (e instanceof Error && e.message === CF_HINT) throw e;
+              return [];
+            }),
+        );
+      }
+      for (const list of await Promise.all(batch)) {
+        for (const n of list) {
+          if (!seen.has(n.path)) {
+            seen.add(n.path);
+            items.push(n);
+          }
+        }
+      }
+    }
+    return items;
+  }
+
+  private async getIndex(): Promise<Plugin.NovelItem[]> {
+    const cached = this.seriesIndex;
+    if (cached && Date.now() - cached.at < INDEX_TTL) return cached.items;
+
+    // Aynı anda birden fazla arama gelirse tek bir çekim paylaşılır
+    if (!this.indexPromise) {
+      this.indexPromise = this.buildIndex()
+        .then(items => {
+          if (items.length) this.seriesIndex = { at: Date.now(), items };
+          return items;
+        })
+        .finally(() => {
+          this.indexPromise = null;
+        });
+    }
+    return this.indexPromise;
+  }
+
   async searchNovels(searchTerm: string, pageNo: number): Promise<Plugin.NovelItem[]> {
-    const term = searchTerm.trim();
-    if (!term || pageNo > 1) return [];
-    return this.novelsFrom(await this.getHtml('/?q=' + encodeURIComponent(term)));
+    // Tüm sonuçlar tek seferde döner, sonraki sayfa yok
+    if (pageNo > 1) return [];
+
+    const words = fold(searchTerm).split(' ').filter(Boolean);
+    if (!words.length) return [];
+
+    const index = await this.getIndex();
+    const results = index.filter(n => {
+      const name = fold(n.name);
+      return words.every(w => name.includes(w));
+    });
+
+    // Başlığı arama ifadesiyle başlayanlar öne çıksın
+    const phrase = words.join(' ');
+    return results.sort(
+      (a, b) =>
+        Number(fold(b.name).startsWith(phrase)) - Number(fold(a.name).startsWith(phrase)),
+    );
   }
 
   // ----------------------------------------------------------------- roman
@@ -320,3 +528,4 @@ class NovelGecesiPlugin implements Plugin.PluginBase {
 }
 
 export default new NovelGecesiPlugin();
+
