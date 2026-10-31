@@ -2,7 +2,7 @@
 
 Bu depo, LNReader için hazırladığım Türkçe eklentileri içerir.
 
-Gelecekte daha fazla eklenti eklemeyi düşünüyorum.
+Eklentileri vaktim oldukça kontrol edip düzenli güncelliyorum ve uygun kaynak bulursam yeni eklentiler de ekliyorum.
 
 ## Basitçe Kurulum Adımları
 
@@ -40,4 +40,4 @@ Eklentiler kişisel kullanım içindir. Her sitenin kullanım şartlarına uymak
 
 ---
 
-*Bu depodaki eklentiler, Anthropic'in Claude modeli kullanılarak geliştirilmiştir.*
+*Bu depodaki eklentilerin kaynak kodları Anthropic'in Claude modeli kullanılarak yazılmaktadır ve araştırma, test ve proje yönetimi benim tarafımca yapılmaktadır.*
