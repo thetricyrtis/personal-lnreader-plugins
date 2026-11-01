@@ -1,0 +1,64 @@
+# Kişisel LNReader Eklentilerim
+
+Bu depo, LNReader için hazırladığım Türkçe eklentileri içerir.
+
+Eklentileri vaktim oldukça kontrol edip düzenli güncelliyorum ve uygun kaynak
+bulursam yeni eklentiler de ekliyorum.
+
+## Basitçe Kurulum Adımları
+
+1. LNReader'ı açın.
+2. Alt menüden **Browse** (Gözat) sekmesine gidin.
+3. Sağ üstteki **üç nokta** menüsüne dokunun.
+4. **Repositories** (Depolar) seçeneğine basın.
+5. Sağ alttaki **+ Add** (Ekle) butonuna dokunun.
+6. Şu adresi oraya yapıştırın:
+
+```text
+https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins/v3.0.0/.dist/plugins.min.json
+```
+
+7. **Add** (Ekle) butonuna basın.
+8. **Plugins** (Eklentiler) sekmesine geçin ve son olarak kurmak istediğiniz
+   eklentileri **Install** (Yükle) ile kurabilirsiniz.
+
+## Depoda Bulunan Eklentiler
+
+### 1. NovZon
+
+- **Site:** `https://novzon.net`
+- **Sürüm:** v1.0.2
+
+### 2. NovelTürk
+
+- **Site:** `https://novelturk.com`
+- **Sürüm:** v1.0.9
+
+### 3. NovelGecesi
+
+- **Site:** `https://novelgecesi.com`
+- **Sürüm:** v1.0.1
+
+## Sorumluluk Reddi
+
+Bu repo, eklentilerin eriştiği kaynak sitelerle veya LNReader ile resmî olarak
+bağlantılı değildir. Eklentiler herhangi bir içerik barındırmaz; içerikler
+ilgili sitelere aittir. Eklentiler kişisel kullanım içindir. Her sitenin
+kullanım şartlarına uymak kullanıcının sorumluluğundadır.
+
+## Lisans ve Atıf
+
+Bu depodaki altyapı dosyaları LNReader resmi eklenti deposundan
+(lnreader/lnreader-plugins) alınmış olup, orijinal MIT lisansı (Copyright (c)
+2021 Rajarshee Chatterjee) altındadır.
+
+`plugins/turkish/` altındaki eklenti kodları ise Copyright (c) 2026 thetricyrtis
+tarafından yazılmış olup, aynı MIT lisansı şartları altında sunulmaktadır.
+
+Orijinal kodun telif hakkı bildirimi MIT lisansı gereği korunmuştur.
+
+---
+
+_Bu depodaki eklentilerin kaynak kodları Anthropic'in Claude modeli kullanılarak
+yazılmaktadır ve araştırma, test ve proje yönetimi benim tarafımca
+yapılmaktadır._

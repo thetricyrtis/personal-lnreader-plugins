@@ -1,0 +1,11 @@
+node_modules
+.idea
+.env
+config.json
+.js
+.dist
+.DS_Store
+dist
+total.svg
+.history
+broken-sites-report.json
