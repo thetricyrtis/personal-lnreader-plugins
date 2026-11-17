@@ -27,7 +27,7 @@ https://raw.githubusercontent.com/thetricyrtis/personal-lnreader-plugins/plugins
 ### 1. NovZon
 
 - **Site:** `https://novzon.net`
-- **Sürüm:** v1.0.2
+- **Sürüm:** v1.0.3
 
 ### 2. NovelTürk
 
